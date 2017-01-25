@@ -1,0 +1,149 @@
+
+
+Introduces new ideas and techniques into the Crisis Center design:
+
+1.- The route URLs will branch into child route trees that parallel the component 
+    trees in the feature areas.
+
+2.- The router will prevent navigation away from the detail view while 
+    there are pending, unsaved changes.
+
+3.- The user will be able to cancel unwanted changes.
+
+4.- The router will block access to certain features until the user logs-in.
+
+5.- In keeping with Separation of Concerns principle, changes to a feature module 
+    such as Crisis Center won't require changes to the AppModule 
+    or any other feature's component.
+
+
+The Crisis Center to conform to the following recommended pattern for
+ Angular applications.
+
+1.- each feature area in its own folder within a defined module
+2.- each area with its own area root component
+3.- each area root component with its own router-outlet and child routes
+4.- area routes rarely (if ever) cross
+
+Relative Navigation
+====================
+While building out the Crisis Center feature, you navigated to the Crisis Detail route
+using a so-called absolute path that begins with a slash.
+You can free the links from this dependency by defining paths that 
+are relative to the current URL segment.
+Navigation within the feature area remains intact even if you change the parent route 
+path to the feature.
+
+
+The link parameters array supports a directory-like syntax for relative navigation.
+
+1.- ./ or no leading slash is relative to the current level.
+2.- ../ to go up one level in the route path.
+
+The can combine relative navigation syntax with an ancestor path. 
+If you must navigate to a sibling route, you could use the ../<parent> convention 
+to go up one level, then over and down the sibling route path.
+
+To navigate a relative path with the Router.navigate method, you must supply 
+the ActivatedRoute to give the router knowledge of where you are in the 
+current route tree.
+
+After the link parameters array, add an object with a relativeTo property 
+set to the ActivatedRoute. The router then calculates the target URL based 
+on the active route's location.
+
+Always specify the complete absolute path when calling router's navigateByUrl method.
+
+
+Displaying Multiple Routes in Named Outlets
+===========================================
+
+In this application, you decide to give users a way to contact the Crisis Center. 
+When a user clicks a "Contact" button, you want to display a message textbox 
+in a popup view.
+
+The popup should stay open, even when switching between pages in the application, 
+until the user closes it by sending the message or canceling.
+Clearly you can't put the popup in the same outlet as the other pages.
+
+Until now, you've defined a single outlet and you've nested child routes 
+under that outlet to group routes together. 
+In fact, the Router only supports one primary unnamed outlet per template.
+
+A template can also have any number of named outlets. Each named outlet 
+has its own set of routes with their own components. 
+Multiple outlets can be displaying different content, determined by different routes,
+all at the same time.
+
+Add an outlet named "popup" in the AppComponent, directly below the regular 
+unnamed outlet.
+
+
+SECONDARY ROUTES
+================
+
+Named outlets are the targets of secondary routes. Secondary routes look like
+ primary routes and you configure them the same way. 
+
+They differ in a few key respects.
+
+1.- They are independent of each other
+2.- They work in combination with other routes.
+3.- They are displayed in named outlets.
+
+Create a new component named ComposeMessageComponent in 
+app/compose-message.component.ts. 
+It displays a simple form with a header, an input box for the message, 
+and two buttons, "Send" and "Cancel".
+
+Secondary Route Navigation: merging routes during navigation
+============================================================
+
+If you navigate to the Crisis Center and click "Contact" you should see 
+something like the following URL in the browser address bar.
+
+http:////crisis-center(popup:compose)
+
+The interesting part of the URL follows the <something>: 
+
+1.- The crisis-center is the primary navigation.
+2.- Parentheses surround the secondary route.
+3.- The secondary route consist of an outlet name (popup), 
+    then a colon separator, followed with the secondary route path (compose)
+
+Click the Heroes link and look at the URL again.
+
+http:////heroes(popup:compose)
+
+The primary navigation part has changed; the secondary route is the same.
+The router is keeping track of two separate branches in a navigation tree 
+and generating a representation of that tree in the URL.
+
+You can add many more outlets and routes, at the top level and in nested levels, 
+creating a navigation tree with many branches. 
+
+The router will generate the URL to go with it. You can tell the router 
+to navigate an entire tree at once by filling out the outlets object 
+mentioned above. Then pass that object inside a link parameter array to the
+router.navigate method.
+
+CLEARING SECONDARY ROUTES
+=========================
+
+Each secondary outlet has its own navigation, independent of the navigation 
+driving the primary outlet.
+Changing a current route that displays in the primary outlet has no effect 
+on the "popup" outlet.  That's why the "popup" stays visible as you navigate 
+among the crises and heroes.
+Clicking the "send" or "cancel" buttons does clear the popup view. 
+
+To see how, look at the ComposeMessageComponent.closePopup method again:
+
+closePopup() {
+  // Providing a `null` value to the named outlet
+  // clears the contents of the named outlet
+  this.router.navigate([{ outlets: { popup: null }}]);
+}
+
+
+

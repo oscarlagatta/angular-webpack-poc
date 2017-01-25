@@ -1,0 +1,259 @@
+Milestone #6: Asynchronous Routing
+
+At some point you'll reach a tipping point where the application takes long time to load.
+How do you combat this problem? With asynchronous routing which loads feature modules lazily, 
+on request. Lazy loading has multiple benefits.
+
+1.- You can load feature areas only when requested by the user.
+2.- You can speed up load time for users that only visit certain areas 
+    of the application.
+3.- You can continue expanding lazy-loaded feature areas without increasing 
+    the size of the initial load bundle.
+
+
+Lazy-Loading route configuration
+--------------------------------
+
+The Router supports empty path routes; 
+we use them to group routes together without adding any additional path segments to the URL. 
+
+We also give a "loadChildren" property set to the address of the module file location (relative to the app root)
+followed by a # separator, followed by the name of the exported module class.
+
+e.g.
+
+{
+    path: 'admin',
+    loadChildren: 'app/admin/admin.module#AdminModule'
+},
+
+When the router navigates to this route, it uses the loadChildren string to dynamically load the AdminModule.
+Then it adds the AdminModule routes to its current route configuration. 
+Finally, it loads the requested route to the destination admin component.
+
+The lazy loading and re-configuration happen just once, when the route is first requested; 
+the module and routes are available immediately for subsequent requests.
+
+NOTE: Angular provides a built-in module loader that supports SystemJS to load modules asynchronously, 
+      but here we are using Webpack as bundling tool, therefore we adjust to this by using a specific 
+      webpack loader. 'angular2-router-loader' 
+
+IMPORTANT: We take the final step and detach the admin feature set from the main application. The root AppModule must 
+           neither load nor reference the AdminModule or its files.
+
+
+CanLoad Guard: guarding unauthorized loading of feature modules
+---------------------------------------------------------------
+
+We can protect the module with a CanActivate guard to prevent unauthorized users from accessing the admin feature area.
+But the router is still loading the module even if the user can't visit any of its components. Actually we will only
+load the module if the user is logged in.
+
+We add a CanLoad guard that only load the module once the user is logged in and attempts to access the feature area.
+
+What we basically need is 
+- open the service that implements the guards
+- import the CanLoad interface from @angular/router
+- add it to the service class implementation list
+- implmenet the canLoad method 
+
+e.g.
+
+canLoad(route: Route): boolean {
+
+    // The router sets the canLoad methods route parameter 
+    // to the intended destination URL. 
+    let url = '/$[route.path]';
+
+    // The checkLogin method redirects to that URL once the user has logged in. 
+    return this.checkLogin(url);
+}
+
+The last step would be to import the Guard service into the routing module and we add the canLoad array
+to the specific route. 
+
+eg.
+
+ {
+    path: 'admin',
+    loadChildren: 'app/admin/admin.module#AdminModule',
+    canLoad: [AuthGuard]
+  },
+
+
+Preloading: background loading of feature areas
+-----------------------------------------------
+We know how to load modules on-demand. We can also load modules asynchronously with preloading.
+
+The AppModule for instance is loaded when the application starts; that's eager loading. 
+
+Now the AdminModule loads only when the user clicks on a link; that's lazy loading.
+
+Preloading is something in between. Consider the Crisis Center. 
+It isn't the first view that a user sees.
+
+By default, the Heroes are the first view. For the smallest initial payload and 
+fastest launch time, we should eagerly load the AppModule and the HeroesModule.
+
+We could lazy load the Crisis Center. But we're almost certain that the user will visit 
+the Crisis Center within minutes of launching the app. Ideally, the app would launch with just
+the AppModule and the HeroesModule loaded and then, almost immediately, 
+load the CrisisCenterModule in the background. 
+
+By the time the user navigates to the Crisis Center, its module will have been loaded
+and ready to go.
+
+That's preloading.
+
+
+HOW IT WORKS
+------------
+After each successful navigation, the router looks in its configuration for an unloaded module 
+that it can preload. 
+
+Whether it preloads a module and which modules it preloads depends upon the preload strategy.
+
+The Router offers two preloading strategies out of the box:
+
+1.- No preloading at all which is the default. Lazy loaded feature areas are still loaded on demand.
+2.- Preloading of all lazy loaded feature areas.
+
+Out of the box, the router either never preloads, or preloads every lazy-load module. 
+The Router also supports custom preloading strategies for fine control over which modules 
+to preload and when.
+
+To enable preloading of all lazy loaded modules, import the PreloadAllModules token 
+from the Angular router package.
+
+The second argument in the RouterModule.forRoot method takes an object for additional configuration options. 
+The "preloadingStrategy" is one of those options. 
+We add the PreloadAllModules token to the forRoot call:
+
+
+RouterModule.forRoot(
+    appRoutes
+    , { preloadingStrategy: PreloadAllModules }
+)
+
+This tells the Router preloader to immediately load all lazy-loaded routes (routes with a loadChildren property).
+
+Surprisingly, one module might not preload. Something mioght be blocking it; and that's because the 
+PreloadAllModules stratey does not load feature areas protected by CanLoad guard. THIS IS BY DESIGN.
+The canLoad guard takes precedence over the preload strategy.
+
+Custom Preloading Strategy
+--------------------------
+
+Preloading every lazy loaded modules works well in many situations, but it isn't always the right choice, 
+especially on mobile devices and over low bandwidth connections. We may choose to preload only certain feature modules,
+based on user metrics and other business and technical factors.
+We can control what and how the router preloads with a custom preloading strategy and we doing that by adding a 
+custom strategy that only preloads routes whose data.preload flag is set to true. 
+
+
+eg.
+
+{
+  path: 'crisis-center',
+  loadChildren: 'app/crisis-center/crisis-center.module#CrisisCenterModule',
+  data: { preload: true }
+},
+
+We add a new file to the project called selective-preloading-strategy.ts and we define a SelectivePreloadingStrategy service.
+
+------------------------------------------------------------------------
+import 'rxjs/add/observable/of';
+import { Injectable } from '@angular/core';
+import { PreloadingStrategy, Route } from '@angular/router';
+import { Observable } from 'rxjs/Observable';
+
+@Injectable()
+export class SelectivePreloadingStrategy implements PreloadingStrategy {
+  preloadedModules: string[] = [];
+
+  preload(route: Route, load: () => Observable<any>): Observable<any> {
+    if (route.data && route.data['preload']) {
+      // add the route path to our preloaded module array
+      this.preloadedModules.push(route.path);
+
+      // log the route path to the console
+      console.log('Preloaded: ' + route.path);
+
+      return load();
+    } else {
+      return Observable.of(null);
+    }
+  }
+}
+------------------------------------------------------------------------
+
+SelectivePreloadingStrategy implements the PreloadingStrategy, which has one method, preload.
+
+The router calls the preload method with two arguments
+
+1.- The route to consider.
+2.- A loader function that can load the routed module asynchronously.
+
+An implementation of preload must return an Observable. If the route should preload, it returns the observable returned 
+by calling the loader function. If the route should not preload, it returns an Observable of null.
+
+In this sample, the preload method loads the route if the route's data.preload flag is truthy.
+
+It also has a side-effect. SelectivePreloadingStrategy logs the path of a selected route in its public preloadedModules array.
+
+We make a few changes to the AppRoutingModule.
+
+1.- Import SelectivePreloadingStrategy into.
+2.- Replace the PreloadAllModules strategy in the call to forRoot with this SelectivePreloadingStrategy.
+3.- Add the SelectivePreloadingStrategy strategy to the AppRoutingModule providers array so it can be injected elsewhere in the app.
+
+Now we only need to
+1.- edit the module which we want to preload
+2.- import the SelectivePreloadingStrategy (it's a service)
+3.- Inject it inot the component constructor
+4.- And we coudl also update the tempalte of the module to display the strategy service's preloadModules array
+
+----------------------------------------------------------------------------------
+
+import { SelectivePreloadingStrategy } from '../selective-preloading-strategy';
+@Component({
+  template:  `
+    <p>Dashboard</p>
+
+    <p>Session ID: {{ sessionId | async }}</p>
+    <a id="anchor"></a>
+    <p>Token: {{ token | async }}</p>
+
+    Preloaded Modules
+    <ul>
+      <li *ngFor="let module of modules">{{ module }}</li>
+    </ul>
+  `
+})
+
+
+export class AdminDashboardComponent implements OnInit {
+  sessionId: Observable<string>;
+  token: Observable<string>;
+  modules: string[];
+
+  constructor(
+    private route: ActivatedRoute,
+    private preloadStrategy: SelectivePreloadingStrategy
+  ) {
+    this.modules = preloadStrategy.preloadedModules;
+  }
+
+  ngOnInit() {
+    // Capture the session ID if available
+    this.sessionId = this.route
+      .queryParams
+      .map(params => params['session_id'] || 'None');
+
+    // Capture the fragment if available
+    this.token = this.route
+      .fragment
+      .map(fragment => fragment || 'None');
+  }
+}
+----------------------------------------------------------------------------------

@@ -1,0 +1,23 @@
+<!--There are no <script> or <link> tags in the index.html. 
+    The HtmlWebpackPlugin inserts them dynamically at runtime.-->
+    
+<!DOCTYPE html>
+<html>
+  <head>
+    <!--The router uses the browser's history.pushState for navigation. 
+    Thanks to pushState, you can make in-app URL paths look the way you want
+    them to look, 
+    e.g. localhost:3000/crisis-center. 
+    The in-app URLs can be indistinguishable from server URLs.
+    
+    HTML 5 style navigation is the Router default
+    -->
+    <base href="/">
+    <title>Angular With Webpack</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <my-app>Loading...</my-app>
+  </body>
+</html>
